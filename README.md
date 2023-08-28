@@ -13,6 +13,14 @@ Thanks to the `--rootfs` option in `nerdctl`, you can run a full blown OS with i
 ## Non-persistent containers (Docker)
 Run docker containers directly using `nerdctl`. People familiar with `docker` and `compose` should feel right at home. However if you want to run anything which relies on the `docker.sock` (Docker API), like [portainer](https://github.com/portainer/portainer/issues/5964), then you may first create a [persistent container](#persistent-containers-like-lxc-or-freebsd-jails) and then install docker inside it according to the [regular installation instructions](https://docs.docker.com/engine/install/#server). Read the [nerdctl](https://github.com/containerd/nerdctl) documentation for more info on the compatibility and differences with docker.
 
+## Requirements
+- bash
+- systemd
+- iptables
+- coreutils
+- curl or wget (optional)
+- tar (optional)
+
 ## Installation
 
 ### TrueNAS SCALE
