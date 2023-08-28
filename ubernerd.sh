@@ -1,0 +1,223 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+ABSOLUTE_SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
+SCRIPT_NAME=$(basename "${ABSOLUTE_SCRIPT_PATH}")
+SCRIPT_PARENT_DIR="$(dirname "$ABSOLUTE_SCRIPT_PATH")"
+
+# Function to show error message and line number
+show_error() {
+	local line=$1
+	local line_content
+	mapfile -s $((line - 1)) -n 1 -t line_content <"$ABSOLUTE_SCRIPT_PATH"
+	echo "An error occurred in the script at line $line:"
+	echo "${line_content[0]}"
+}
+
+# Trap the script exit and call the error message function
+trap 'show_error $LINENO' ERR
+
+fail() {
+	echo -e "$1" >&2 && exit 1
+}
+
+[[ -z "${BASH_VERSINFO+x}" ]] && fail 'This script must run in bash...'
+[[ $UID -ne 0 ]] && fail "Run this script as root..."
+cd "${SCRIPT_PARENT_DIR}" || fail "Could not change working directory to ${SCRIPT_PARENT_DIR}..."
+
+stat_chmod() {
+	# Only run chmod if mode is different from current mode
+	if [[ "$(stat -c%a "${2}")" -ne "${1}" ]]; then chmod "${1}" "${2}"; fi
+}
+
+# Function to check if an executable is available
+is_executable_available() {
+	executable=$1
+
+	# Check if the executable is available
+	if type "$executable" >/dev/null 2>&1; then
+		return 0
+	else
+		return 1
+	fi
+}
+
+download() {
+	local url=$1
+
+	if is_executable_available 'wget'; then
+		wget -qO- "$url"
+	elif is_executable_available 'curl'; then
+		curl -sSL "$url"
+	else
+		fail "Neither wget nor curl is installed. Please install either of them to proceed."
+	fi
+}
+
+# Function to replace grep without external commands
+mygrep() {
+	pattern=$1
+
+	# Read the input from pipe line by line
+	while IFS= read -r line; do
+		# Check if the line contains the pattern
+		if [[ $line == *"$pattern"* ]]; then
+			echo "$line"
+		fi
+	done
+}
+
+# Set appropriate permissions (if not already set) for this file, since it's executed as root
+stat_chmod 700 "${SCRIPT_NAME}"
+
+# Prepend nerdctl binaries to path
+export PATH="${SCRIPT_PARENT_DIR}/nerdctl_full/bin:${PATH}"
+
+# TODO: check if ubernerd-containerd is already running, else don't continue and tell user to manually stop it first
+
+echo "Creating directories (if necessary)..."
+
+# List of directories to create
+dir_list=("config/cni/net.d" "config/containerd" "config/nerdctl" "nerdctl_full" "plugins/containerd" "state/containerd/root" "state/containerd/state" "state/nerdctl/data_root")
+
+# Loop through the list and create directories
+for dir_name in "${dir_list[@]}"; do
+	mkdir -p --verbose "$dir_name"
+done
+
+# Check if containerd and nerdctl inside nerdctl_full, else download and extract latest release
+
+if [[ -f 'nerdctl_full/bin/containerd' && -f 'nerdctl_full/bin/nerdctl' ]]; then
+	echo 'Found containerd and nerdctl inside nerdctl_full directory.'
+	echo 'No need to download...'
+else
+	echo 'Need to download latest release of nerdctl.'
+
+	manualy_download_extract_message='Please manually download the latest nerdctl-full from https://github.com/containerd/nerdctl/releases, extract it and place contents in the nerdctl_full directory.'
+
+	if ! is_executable_available "wget" && ! is_executable_available "curl"; then
+		echo "Neither wget or curl are avaialble..."
+		fail "$manualy_download_extract_message"
+	fi
+
+	if ! is_executable_available 'tar'; then
+		echo 'The tar command is not available...'
+		fail "$manualy_download_extract_message"
+	fi
+
+	download_url="$(download 'https://api.github.com/repos/containerd/nerdctl/releases/latest' | mygrep 'browser_download_url' | mygrep 'nerdctl-full-' | mygrep '-linux-amd64.tar.gz' | cut -d '"' -f 4)"
+
+	echo "Downloading $download_url..."
+	download "$download_url" | tar -xz -C 'nerdctl_full'
+fi
+
+# TODO: To support the opt plugin, the path variable needs to be dynamically set to a path
+# inside our parent directory (to ensure portability). If we put a comment after the path value:
+
+# [plugins]
+
+#   [plugins."io.containerd.internal.v1.opt"]
+#	 path = "/path/to/ubernerd/plugins/containerd" # MANAGED BY UBERNERD - DO NOT EDIT OR REMOVE THIS LINE
+
+# Then we can search for this line with mygrep, and if the line has the wrong value we can update it.
+
+if [[ ! -f 'config/containerd/config.toml' ]]; then
+	echo 'Creating containerd config.toml file in config/containerd'
+
+	cat <<-'EOF' >'config/containerd/config.toml'
+		version = 2
+
+		# cri is not used by nerdctl
+		# opt needs a hard-coded absolute path to load plugins from (not portable) 
+		disabled_plugins = ["io.containerd.grpc.v1.cri", "io.containerd.internal.v1.opt"]
+
+		[grpc]
+		address = "/run/ubernerd/containerd/containerd.sock"
+	EOF
+fi
+
+# Create initial nerdctl.toml
+if [[ ! -f 'config/nerdctl/nerdctl.toml' ]]; then
+	echo 'Creating nerdctl.toml file in config/nerdctl'
+
+	cat <<-'EOF' >'config/nerdctl/nerdctl.toml'
+		address = "unix:///run/ubernerd/containerd/containerd.sock"
+	EOF
+fi
+
+# TODO: build this script string in a different way,
+# so I don't have to escape inside the string,
+# and I can have proper syntax checking
+
+nerdctl_script_contents=$(
+	cat <<EOF
+#!/usr/bin/env bash
+
+export PATH="$PATH"
+
+# Make nerdctl use our config file
+export NERDCTL_TOML="${SCRIPT_PARENT_DIR}/config/nerdctl/nerdctl.toml"
+
+# Make nerdctl use custom directories and pass through all command line arguments
+nerdctl \\
+	--data-root "${SCRIPT_PARENT_DIR}/state/nerdctl/data_root" \\
+	--cni-path "${SCRIPT_PARENT_DIR}/nerdctl_full/libexec/cni" \\
+	--cni-netconfpath "${SCRIPT_PARENT_DIR}/config/cni/net.d" \\
+	"\$@"
+EOF
+)
+
+# Create the nerdctl bash script (if not exists or contents are different)
+if [[ ! -f nerdctl || ! "$(cat nerdctl)" = "$nerdctl_script_contents" ]]; then
+	echo 'Creating nerdctl script'
+	printf "%s" "$nerdctl_script_contents" >nerdctl
+fi
+
+# Make nerdctl executable if not already
+stat_chmod 755 nerdctl
+
+# TODO: create symlink to nerdctl ONLY if enabled via env variable (don't create by default as technically it modifies host rootfs and it's not portable)
+# TODO: update symlink if it's pointing at wrong path
+if [[ ! -f /usr/local/sbin/nerdctl ]]; then
+	echo "Creating symlink for nerdctl..."
+	ln -s "${SCRIPT_PARENT_DIR}/nerdctl" /usr/local/sbin/nerdctl
+fi
+
+echo "Enabling IP forwarding..."
+echo 1 >/proc/sys/net/ipv4/ip_forward
+
+# Check if the job has failed
+if [[ 'failed' == $(systemctl show -p ActiveState --value 'ubernerd-containerd') ]]; then
+	# Ensure to reset job if it previously failed (else we can't start it again)
+	systemctl reset-failed ubernerd-containerd
+fi
+
+echo "Starting containerd..."
+
+# Unset trap, no need to know line numbers from here on
+trap - ERR
+
+# Make containerd use custom directories and pass through all command line arguments
+systemd-run \
+	--unit='ubernerd-containerd' \
+	--description='containerd container runtime started by ubernerd' \
+	--collect \
+	-p Delegate=yes \
+	-p KillMode=process \
+	-p LimitNPROC=infinity \
+	-p LimitCORE=infinity \
+	-p LimitNOFILE=infinity \
+	-p TasksMax=infinity \
+	-p OOMScoreAdjust=-999 \
+	--setenv=PATH \
+	-- \
+	containerd \
+	--config "${SCRIPT_PARENT_DIR}/config/containerd/config.toml" \
+	--root "${SCRIPT_PARENT_DIR}/state/containerd/root" \
+	--state "${SCRIPT_PARENT_DIR}/state/containerd/state"
+
+echo "Waiting a bit for containerd to start..."
+sleep 2
+
+SYSTEMD_COLORS=1 journalctl -u ubernerd-containerd -e | tail -n 5
