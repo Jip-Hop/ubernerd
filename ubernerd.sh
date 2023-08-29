@@ -178,11 +178,7 @@ export PATH="$PATH"
 export NERDCTL_TOML="${script_parent_dir}/config/nerdctl/nerdctl.toml"
 
 # Make nerdctl use custom directories and pass through all command line arguments
-nerdctl \\
-	--data-root "${script_parent_dir}/state/nerdctl/data_root" \\
-	--cni-path "${script_parent_dir}/nerdctl_full/libexec/cni" \\
-	--cni-netconfpath "${script_parent_dir}/config/cni/net.d" \\
-	"\$@"
+nerdctl --data-root "${script_parent_dir}/state/nerdctl/data_root" --cni-path "${script_parent_dir}/nerdctl_full/libexec/cni" --cni-netconfpath "${script_parent_dir}/config/cni/net.d" "\$@"
 EOF
 )
 
