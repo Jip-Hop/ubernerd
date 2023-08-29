@@ -100,6 +100,7 @@ for dir_name in "${dir_list[@]}"; do
 done
 
 # Check if containerd and nerdctl inside nerdctl_full, else download and extract latest release
+# TODO: Update/upgrade logic: currently ubernerd only installs latest version once, and sticks to that version
 
 if [[ -f 'nerdctl_full/bin/containerd' && -f 'nerdctl_full/bin/nerdctl' ]]; then
 	echo ''
