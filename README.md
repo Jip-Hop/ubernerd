@@ -24,6 +24,7 @@ Run docker containers directly using `nerdctl`. People familiar with `docker` an
 - coreutils
 - curl or wget (optional)
 - tar (optional)
+- root rights (currently ubernerd does not support rootless containers)
 
 ## Installation
 Create a directory where you want to store `ubernerd.sh`, config and data. E.g. on an externally connected SSD formatted as `ext4` or on a ZFS dataset: `/mnt/tank/ubernerd`. Download the script into this directory.
