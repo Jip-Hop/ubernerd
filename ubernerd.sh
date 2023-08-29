@@ -122,6 +122,7 @@ else
 		fail "$manualy_download_extract_message"
 	fi
 
+	# TODO: check for amd64 or arm64 
 	download_url="$(download 'https://api.github.com/repos/containerd/nerdctl/releases/latest' | mygrep 'browser_download_url' | mygrep 'nerdctl-full-' | mygrep '-linux-amd64.tar.gz' | cut -d '"' -f 4)"
 
 	echo ''
@@ -240,6 +241,12 @@ trap - ERR
 # Make containerd use custom directories and pass through all command line arguments
 # Use KillMode=mixed instead of KillMode=process to also kill subprocesses (including all running containers),
 # otherwise there's no way to shutdown ubernerd and run this script again
+
+# TODO: perhaps I can use KillMode=process when I stop using systemd-run and instead write a .service file directly
+# to /run/systemd/transient/
+# That seems to be what systemd-run does under the hood
+# But then I should be able to overwrite this .service file and allow it to be reloaded and restarted...
+# Which systemd-run doesn't allow me to do if there are still sub-processes running...
 systemd-run \
 	--unit='ubernerd-containerd' \
 	--description='containerd container runtime started by ubernerd' \
