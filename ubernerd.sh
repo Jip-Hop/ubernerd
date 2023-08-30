@@ -123,8 +123,17 @@ else
 		fail "$manualy_download_extract_message"
 	fi
 
-	# TODO: check for amd64 or arm64 
-	download_url="$(download 'https://api.github.com/repos/containerd/nerdctl/releases/latest' | mygrep 'browser_download_url' | mygrep 'nerdctl-full-' | mygrep '-linux-amd64.tar.gz' | cut -d '"' -f 4)"
+	arch=$(uname -m)
+
+	if [[ $arch == "x86_64" ]]; then
+		arch=amd64
+		echo "Detected $arch architecture, downloading $arch version..."
+	else
+		arch=arm64
+		echo "Assuming $arch architecture, downloading $arch version..."
+	fi
+
+	download_url="$(download 'https://api.github.com/repos/containerd/nerdctl/releases/latest' | mygrep 'nerdctl-full-' | mygrep "-linux-$arch.tar.gz" | mygrep 'browser_download_url' | cut -d '"' -f 4)"
 
 	echo ''
 	echo "Downloading $download_url..."
