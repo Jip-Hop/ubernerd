@@ -48,7 +48,6 @@ is_executable_available 'systemctl' || fail "systemctl is required but not avail
 if systemctl is-active --quiet "ubernerd-containerd"; then
 	echo 'Abort: ubernerd-containerd is already running!'
 	echo 'You may stop it with: systemctl stop ubernerd-containerd.'
-	fail 'Be aware that this will stop all running containers!'
 else
 	echo 'Welcome ubernerd!'
 fi
@@ -254,35 +253,69 @@ fi
 echo ''
 echo "Starting containerd..."
 
-# Unset trap, no need to know line numbers from here on
-trap - ERR
+# Create the transient direcotry under /run (which is tmpfs and not written to disk)
+mkdir -p /run/systemd/transient
 
+# Write service file in the location where systemd-run would have created one
+# Benefit of not using systemd-run is that we can overwrite/update the service file
+# and reload it for changes to take effect (while keeping the same service name)
+# When using systemd-run you'd have to make sure the service with same name is fully
+# removed using --collect, but this doesn't happen when combined with KillMode=process,
+# since the service will continue to exist when sub-processes are still running
 # Make containerd use custom directories and pass through all command line arguments
-# Use KillMode=mixed instead of KillMode=process to also kill subprocesses (including all running containers),
-# otherwise there's no way to shutdown ubernerd and run this script again
+cat <<-EOF >'/run/systemd/transient/ubernerd-containerd.service'
+	# Copyright The containerd Authors.
+	#
+	# Licensed under the Apache License, Version 2.0 (the "License");
+	# you may not use this file except in compliance with the License.
+	# You may obtain a copy of the License at
+	#
+	#     http://www.apache.org/licenses/LICENSE-2.0
+	#
+	# Unless required by applicable law or agreed to in writing, software
+	# distributed under the License is distributed on an "AS IS" BASIS,
+	# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+	# See the License for the specific language governing permissions and
+	# limitations under the License.
 
-# TODO: perhaps I can use KillMode=process when I stop using systemd-run and instead write a .service file directly
-# to /run/systemd/transient/
-# That seems to be what systemd-run does under the hood
-# But then I should be able to overwrite this .service file and allow it to be reloaded and restarted...
-# Which systemd-run doesn't allow me to do if there are still sub-processes running...
-systemd-run \
-	--unit='ubernerd-containerd' \
-	--description='containerd container runtime started by ubernerd' \
-	--collect \
-	-p Delegate=yes \
-	-p KillMode=mixed \
-	-p LimitNPROC=infinity \
-	-p LimitCORE=infinity \
-	-p LimitNOFILE=infinity \
-	-p TasksMax=infinity \
-	-p OOMScoreAdjust=-999 \
-	--setenv=PATH="$PATH" \
-	-- \
-	containerd \
-	--config "${script_parent_dir}/config/containerd/config.toml" \
-	--root "${script_parent_dir}/state/containerd/root" \
-	--state "${script_parent_dir}/state/containerd/state"
+	[Unit]
+	Description=containerd container runtime started by ubernerd
+	Documentation=https://containerd.io
+	After=network.target local-fs.target
+
+	[Service]
+	#uncomment to fallback to legacy CRI plugin implementation with podsandbox support.
+	#Environment="DISABLE_CRI_SANDBOXES=1"
+	Environment='PATH=$PATH'
+	ExecStartPre=-/sbin/modprobe overlay
+	ExecStart='$script_parent_dir/nerdctl_full/bin/containerd' \
+		--config '${script_parent_dir}/config/containerd/config.toml' \
+		--root '${script_parent_dir}/state/containerd/root' \
+		--state '${script_parent_dir}/state/containerd/state'
+
+	Type=notify
+	Delegate=yes
+	KillMode=process
+	Restart=always
+	RestartSec=5
+	# Having non-zero Limit*s causes performance problems due to accounting overhead
+	# in the kernel. We recommend using cgroups to do container-local accounting.
+	LimitNPROC=infinity
+	LimitCORE=infinity
+	LimitNOFILE=infinity
+	# Comment TasksMax if your systemd version does not supports it.
+	# Only systemd 226 and above support this version.
+	TasksMax=infinity
+	OOMScoreAdjust=-999
+
+	[Install]
+	WantedBy=multi-user.target
+EOF
+
+# Make systemd realize there's a new/updated service file
+systemctl daemon-reload
+# Start containerd
+systemctl start ubernerd-containerd
 
 echo ''
 echo 'Waiting a bit for containerd to start...'
