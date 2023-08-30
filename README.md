@@ -20,8 +20,8 @@ Run docker containers directly using `nerdctl`. People familiar with `docker` an
 ## Requirements
 - bash
 - systemd
-- iptables
 - coreutils
+- iptables (except when using `--network=host` or `--network=none`)
 - curl or wget (optional)
 - tar (optional)
 - root rights (currently ubernerd does not support rootless containers)
@@ -97,3 +97,6 @@ Run `ubernerd.sh` as Post Init Script with Type `Command` from the TrueNAS web i
 
 ## Why call it ubernerd?
 That's what my girlfriend calls me when I can't stop thinking about this project. Coincidentally über (meaning "over", "above") expresses that this project is build on top of contai**nerd** and **nerd**ctl.
+
+## Development
+To automatically test the `ubernerd.sh` script, you may run `./test.sh`. It requires docker to be installed locally.
