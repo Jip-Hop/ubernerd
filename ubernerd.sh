@@ -322,8 +322,8 @@ echo 'Waiting a bit for containerd to start...'
 
 # Execute the command until it is successful
 until ./nerdctl info >/dev/null 2>&1; do
-    echo -n '.'
-    sleep 1
+	echo -n '.'
+	sleep 1
 done
 
 echo ''
