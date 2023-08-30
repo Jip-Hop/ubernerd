@@ -28,5 +28,5 @@ jobs:
       # Install ubernerd and run hello-world container with nerdctl
       - name: Run a multi-line script
         run: |
-          ./ubernerd.sh
-          ./nerdctl run hello-world
+          sudo ./ubernerd.sh
+          sudo ./nerdctl run hello-world
