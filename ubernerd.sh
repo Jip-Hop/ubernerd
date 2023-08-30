@@ -319,7 +319,14 @@ systemctl start ubernerd-containerd
 
 echo ''
 echo 'Waiting a bit for containerd to start...'
-sleep 2
+
+# Execute the command until it is successful
+until ./nerdctl info >/dev/null 2>&1; do
+    echo -n '.'
+    sleep 1
+done
 
 echo ''
-SYSTEMD_COLORS=1 journalctl -u ubernerd-containerd -e | tail -n 5
+echo 'Containerd started successfully!'
+echo ''
+./nerdctl info
