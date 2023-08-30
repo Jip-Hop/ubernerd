@@ -29,6 +29,21 @@ fail() {
 [[ -z "${BASH_VERSINFO+x}" ]] && fail 'This script must run in bash...'
 [[ $UID -ne 0 ]] && fail "Run this script as root..."
 
+# Function to check if an executable is available
+is_executable_available() {
+	executable=$1
+
+	# Check if the executable is available
+	if type "$executable" >/dev/null 2>&1; then
+		return 0
+	else
+		return 1
+	fi
+}
+
+# TODO: should be possible to start containerd without systemd...
+is_executable_available 'systemctl' || fail "systemctl is required but not available..."
+
 # Check if ubernerd-containerd is already running, else don't continue and tell user to manually stop it first
 if systemctl is-active --quiet "ubernerd-containerd"; then
 	echo 'Abort: ubernerd-containerd is already running!'
@@ -43,18 +58,6 @@ cd "${script_parent_dir}" || fail "Could not change working directory to ${scrip
 stat_chmod() {
 	# Only run chmod if mode is different from current mode
 	if [[ "$(stat -c%a "${2}")" -ne "${1}" ]]; then chmod "${1}" "${2}"; fi
-}
-
-# Function to check if an executable is available
-is_executable_available() {
-	executable=$1
-
-	# Check if the executable is available
-	if type "$executable" >/dev/null 2>&1; then
-		return 0
-	else
-		return 1
-	fi
 }
 
 download() {
