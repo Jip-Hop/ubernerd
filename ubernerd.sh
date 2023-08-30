@@ -177,23 +177,33 @@ if [[ ! -f 'config/nerdctl/nerdctl.toml' ]]; then
 	EOF
 fi
 
-# TODO: build this script string in a different way,
-# so I don't have to escape inside the string,
-# and I can have proper syntax checking
+run_nerdctl() {
+	ubernerd_dir=$(dirname "$(readlink -f "$0")")
+	# Prepend nerdctl binaries to path
+	export PATH="${ubernerd_dir}/nerdctl_full/bin:${PATH}"
+	# Make nerdctl use our config file
+	export NERDCTL_TOML="${ubernerd_dir}/config/nerdctl/nerdctl.toml"
 
-nerdctl_script_contents=$(
-	cat <<EOF
-#!/usr/bin/env bash
+	# Make nerdctl use custom directories and pass through all command line arguments
+	nerdctl \
+		--data-root "${ubernerd_dir}/state/nerdctl/data_root" \
+		--cni-path "${ubernerd_dir}/nerdctl_full/libexec/cni" \
+		--cni-netconfpath "${ubernerd_dir}/config/cni/net.d" \
+		"$@"
+}
 
-export PATH="$PATH"
+nerdctl_script_contents='#!/usr/bin/env bash'
 
-# Make nerdctl use our config file
-export NERDCTL_TOML="${script_parent_dir}/config/nerdctl/nerdctl.toml"
+# Run the type command and store the output in an array
+mapfile -s 3 -t lines < <(type -a run_nerdctl)
+# Erase last line in the array
+lines[${#lines[@]} - 1]=""
 
-# Make nerdctl use custom directories and pass through all command line arguments
-nerdctl --data-root "${script_parent_dir}/state/nerdctl/data_root" --cni-path "${script_parent_dir}/nerdctl_full/libexec/cni" --cni-netconfpath "${script_parent_dir}/config/cni/net.d" "\$@"
-EOF
-)
+# Build the nerdctl wrapper script content
+for line in "${lines[@]}"; do
+	# Append each line of the type output to the script contents and strip leading spaces
+	nerdctl_script_contents="${nerdctl_script_contents}"$'\n'"${line#"${line%%[![:space:]]*}"}"
+done
 
 # Create the nerdctl bash script (if not exists or contents are different)
 if [[ ! -f nerdctl || ! "$(cat nerdctl)" = "$nerdctl_script_contents" ]]; then
