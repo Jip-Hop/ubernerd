@@ -12,8 +12,12 @@ show_error() {
 
 trap show_error ERR
 
+echo "Start test script!"
+
+# Create a local cache of the downloaded and extracted nerdctl binaries to save time
+mkdir -p /tmp/ubernerd-test
 # Test ubernerd installation inside a container with systemd init enabled
-docker run -d --name ubernerd-test --privileged -v ./ubernerd.sh:/root/ubernerd.sh:ro -w /root --rm almalinux/9-init
+docker run -d --name ubernerd-test --privileged -v /tmp/ubernerd-test:/root/nerdctl_full -v ./ubernerd.sh:/root/ubernerd.sh:ro -w /root --rm almalinux/9-init
 docker exec ubernerd-test ./ubernerd.sh
 
 # Use --network=host because there is no iptables in this image
