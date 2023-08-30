@@ -21,7 +21,7 @@ cp ubernerd.sh /tmp/ubernerd-test/
 # Test ubernerd installation inside a container with systemd init enabled
 docker run -d --name ubernerd-test --privileged -v /tmp/ubernerd-test:/root/ubernerd-test -w /root/ubernerd-test --rm almalinux/9-init
 # Create the symlink, to test running from a different working directory
-docker exec -e CREATE_SYMLINK=1 ubernerd-test ./ubernerd.sh
+docker exec -e CREATE_SYMLINK=1 -e UBERNERD_UPGRADE=1 ubernerd-test ./ubernerd.sh
 
 # Use -w to run from a different working directory to test the symlink
 # Use --network=host because there is no iptables in this image

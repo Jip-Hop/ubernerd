@@ -5,6 +5,9 @@ set -euo pipefail
 # Set the CREATE_SYMLINK environment variable to 1 to make the nerdctl command available globally
 # This will modify the host rootfs
 CREATE_SYMLINK="${CREATE_SYMLINK:-0}"
+UBERNERD_UPGRADE="${UBERNERD_UPGRADE:-0}"
+# TODO: allow a configurable namespace (default ubernerd) to prevent possible clashes on the filesystem
+# with regards to the service file and socket path etc.
 
 absolute_script_path="$(realpath "${BASH_SOURCE[0]}")"
 script_name=$(basename "${absolute_script_path}")
@@ -101,13 +104,62 @@ for dir_name in "${dir_list[@]}"; do
 	mkdir -p --verbose "$dir_name"
 done
 
-# Check if containerd and nerdctl inside nerdctl_full, else download and extract latest release
-# TODO: Update/upgrade logic: currently ubernerd only installs latest version once, and sticks to that version
+download_nerdctl(){
+	arch=$(uname -m)
 
+	if [[ $arch == "x86_64" ]]; then
+		arch=amd64
+		echo "Detected $arch architecture, downloading $arch version..."
+	else
+		arch=arm64
+		echo "Assuming $arch architecture, downloading $arch version..."
+	fi
+
+	download_url="$(download 'https://api.github.com/repos/containerd/nerdctl/releases/latest' | mygrep 'nerdctl-full-' | mygrep "-linux-$arch.tar.gz" | mygrep 'browser_download_url' | cut -d '"' -f 4)"
+
+	echo ''
+	echo "Downloading $download_url..."
+	download "$download_url" | tar -xz -C 'nerdctl_full'
+}
+
+
+# TODO: only download from api.github.com once...
+
+needs_download=0
+
+# Check if containerd and nerdctl inside nerdctl_full, else download and extract latest release
+# If UBERNERD_UPGRADE is enabled, check if upgrade is available too
 if [[ -f 'nerdctl_full/bin/containerd' && -f 'nerdctl_full/bin/nerdctl' ]]; then
 	echo ''
-	echo 'Found containerd and nerdctl inside nerdctl_full directory (no need to download).'
+	echo 'Found containerd and nerdctl inside nerdctl_full directory.'
+
+	if [[ "$UBERNERD_UPGRADE" -eq 1 ]]; then
+		echo "Check if upgrade is available..."
+		local_version="$(nerdctl_full/bin/nerdctl version -f '{{.Client.Version}}' 2>/dev/null)" || true
+
+		string="$(download 'https://api.github.com/repos/containerd/nerdctl/releases/latest' | mygrep '"tag_name":')"
+		pattern='v([0-9]+\.?)+'
+		[[ $string =~ $pattern ]]
+		remote_version="${BASH_REMATCH[0]}"
+
+		if [[ "$remote_version" != "$local_version" ]]; then
+			echo "Need to upgrade to: $remote_version".
+			needs_download=1
+			old_nerdctl_full="nerdctl_full_$local_version"
+			
+			echo "Backing up current installation to $old_nerdctl_full"
+			mv nerdctl_full "$old_nerdctl_full"
+			mkdir nerdctl_full
+		else
+			echo "Already using the latest version: $remote_version".
+		fi
+	fi
+
 else
+	needs_download=1
+fi
+
+if [[ "$needs_download" -eq 1 ]]; then
 	echo ''
 	echo 'Need to download latest release of nerdctl...'
 
@@ -125,21 +177,7 @@ else
 		fail "$manualy_download_extract_message"
 	fi
 
-	arch=$(uname -m)
-
-	if [[ $arch == "x86_64" ]]; then
-		arch=amd64
-		echo "Detected $arch architecture, downloading $arch version..."
-	else
-		arch=arm64
-		echo "Assuming $arch architecture, downloading $arch version..."
-	fi
-
-	download_url="$(download 'https://api.github.com/repos/containerd/nerdctl/releases/latest' | mygrep 'nerdctl-full-' | mygrep "-linux-$arch.tar.gz" | mygrep 'browser_download_url' | cut -d '"' -f 4)"
-
-	echo ''
-	echo "Downloading $download_url..."
-	download "$download_url" | tar -xz -C 'nerdctl_full'
+	download_nerdctl
 fi
 
 # TODO: To support the opt plugin, the path variable needs to be dynamically set to a path
