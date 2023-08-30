@@ -267,7 +267,7 @@ systemd-run \
 	-p LimitNOFILE=infinity \
 	-p TasksMax=infinity \
 	-p OOMScoreAdjust=-999 \
-	--setenv=PATH \
+	--setenv=PATH="$PATH" \
 	-- \
 	containerd \
 	--config "${script_parent_dir}/config/containerd/config.toml" \
