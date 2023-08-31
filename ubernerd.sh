@@ -265,7 +265,7 @@ if [[ "${CREATE_SYMLINK}" -eq 1 ]]; then
 	symlink_path=/usr/local/sbin/nerdctl
 	correct_destination="${script_parent_dir}/nerdctl"
 
-	if [[ ! -f /usr/local/sbin/nerdctl ]]; then
+	if [[ ! -e "$symlink_path" && ! -L "$symlink_path" ]]; then
 		echo ''
 		echo 'Creating symlink for nerdctl...'
 		ln -s "$correct_destination" "$symlink_path"
