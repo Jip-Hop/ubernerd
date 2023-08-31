@@ -6,6 +6,7 @@ set -euo pipefail
 # This will modify the host rootfs
 CREATE_SYMLINK="${CREATE_SYMLINK:-0}"
 UBERNERD_UPGRADE="${UBERNERD_UPGRADE:-0}"
+# TODO: also check for newer version of ubernerd.sh script and upgrade when UBERNERD_UPGRADE is enabled
 # TODO: allow a configurable namespace (default ubernerd) to prevent possible clashes on the filesystem
 # with regards to the service file and socket path etc.
 
@@ -44,6 +45,10 @@ is_executable_available() {
 	fi
 }
 
+get_timestamp() {
+	date +%Y-%m-%d_%H-%M-%S
+}
+
 # TODO: should be possible to start containerd without systemd...
 is_executable_available 'systemctl' || fail "systemctl is required but not available..."
 
@@ -66,9 +71,9 @@ download() {
 	local url=$1
 
 	if is_executable_available 'wget'; then
-		wget -qO- "$url"
+		wget -qO- --tries=5 "$url"
 	elif is_executable_available 'curl'; then
-		curl -sSL "$url"
+		curl -sSL --retry 5 "$url"
 	else
 		fail "Neither wget nor curl is installed. Please install either of them to proceed."
 	fi
@@ -104,28 +109,12 @@ for dir_name in "${dir_list[@]}"; do
 	mkdir -p --verbose "$dir_name"
 done
 
-download_nerdctl(){
-	arch=$(uname -m)
-
-	if [[ $arch == "x86_64" ]]; then
-		arch=amd64
-		echo "Detected $arch architecture, downloading $arch version..."
-	else
-		arch=arm64
-		echo "Assuming $arch architecture, downloading $arch version..."
-	fi
-
-	download_url="$(download 'https://api.github.com/repos/containerd/nerdctl/releases/latest' | mygrep 'nerdctl-full-' | mygrep "-linux-$arch.tar.gz" | mygrep 'browser_download_url' | cut -d '"' -f 4)"
-
-	echo ''
-	echo "Downloading $download_url..."
-	download "$download_url" | tar -xz -C 'nerdctl_full'
+get_nerdctl_latest_release_json() {
+	download 'https://api.github.com/repos/containerd/nerdctl/releases/latest'
 }
 
-
-# TODO: only download from api.github.com once...
-
 needs_download=0
+nerdctl_latest_release_json=
 
 # Check if containerd and nerdctl inside nerdctl_full, else download and extract latest release
 # If UBERNERD_UPGRADE is enabled, check if upgrade is available too
@@ -137,16 +126,21 @@ if [[ -f 'nerdctl_full/bin/containerd' && -f 'nerdctl_full/bin/nerdctl' ]]; then
 		echo "Check if upgrade is available..."
 		local_version="$(nerdctl_full/bin/nerdctl version -f '{{.Client.Version}}' 2>/dev/null)" || true
 
-		string="$(download 'https://api.github.com/repos/containerd/nerdctl/releases/latest' | mygrep '"tag_name":')"
+		nerdctl_latest_release_json=$(get_nerdctl_latest_release_json)
+
+		remote_version="$(printf "%s" "$nerdctl_latest_release_json" | mygrep '"tag_name":')"
 		pattern='v([0-9]+\.?)+'
-		[[ $string =~ $pattern ]]
+		[[ $remote_version =~ $pattern ]]
 		remote_version="${BASH_REMATCH[0]}"
 
 		if [[ "$remote_version" != "$local_version" ]]; then
-			echo "Need to upgrade to: $remote_version".
+			echo "Local version: $local_version".
+			echo "Remote version: $remote_version".
+			echo "Needs to upgrade!"
+
 			needs_download=1
-			old_nerdctl_full="nerdctl_full_$local_version"
-			
+			old_nerdctl_full="nerdctl_full_${local_version}_$(get_timestamp)"
+
 			echo "Backing up current installation to $old_nerdctl_full"
 			mv nerdctl_full "$old_nerdctl_full"
 			mkdir nerdctl_full
@@ -157,6 +151,7 @@ if [[ -f 'nerdctl_full/bin/containerd' && -f 'nerdctl_full/bin/nerdctl' ]]; then
 
 else
 	needs_download=1
+	nerdctl_latest_release_json=$(get_nerdctl_latest_release_json)
 fi
 
 if [[ "$needs_download" -eq 1 ]]; then
@@ -177,7 +172,21 @@ if [[ "$needs_download" -eq 1 ]]; then
 		fail "$manualy_download_extract_message"
 	fi
 
-	download_nerdctl
+	arch=$(uname -m)
+
+	if [[ $arch == "x86_64" ]]; then
+		arch=amd64
+		echo "Detected $arch architecture, downloading $arch version..."
+	else
+		arch=arm64
+		echo "Assuming $arch architecture, downloading $arch version..."
+	fi
+
+	download_url="$(printf "%s" "$nerdctl_latest_release_json" | mygrep 'nerdctl-full-' | mygrep "-linux-$arch.tar.gz" | mygrep 'browser_download_url' | cut -d '"' -f 4)"
+
+	echo ''
+	echo "Downloading $download_url..."
+	download "$download_url" | tar -xz -C 'nerdctl_full'
 fi
 
 # TODO: To support the opt plugin, the path variable needs to be dynamically set to a path
