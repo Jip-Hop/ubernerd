@@ -7,6 +7,8 @@ set -euo pipefail
 CREATE_SYMLINK="${CREATE_SYMLINK:-0}"
 UBERNERD_UPGRADE="${UBERNERD_UPGRADE:-0}"
 # TODO: also check for newer version of ubernerd.sh script and upgrade when UBERNERD_UPGRADE is enabled
+# BEWARE that this would overwrite the current file, even in test scripts (where the local version is more-up-to-date)
+# So either disable UBERNERD_UPGRADE in test scripts or make an additional environment var to disable upgrading ubernerd.sh itself
 # TODO: allow a configurable namespace (default ubernerd) to prevent possible clashes on the filesystem
 # with regards to the service file and socket path etc.
 
@@ -223,6 +225,8 @@ if [[ ! -f 'config/nerdctl/nerdctl.toml' ]]; then
 	EOF
 fi
 
+# Template function, function body will be written to shell script
+# Ensure this function doesn't depend on external variables or functions
 run_nerdctl() {
 	ubernerd_dir=$(dirname "$(readlink -f "$0")")
 	# Prepend nerdctl binaries to path
@@ -377,3 +381,7 @@ echo ''
 echo 'Containerd started successfully!'
 echo ''
 ./nerdctl info
+
+# TODO: at this point there's this path:
+# /run/containerd/runc/default/
+# Which shouldn't be there as I try to keep everything under /run/ubernerd/containerd
