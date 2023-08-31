@@ -386,3 +386,5 @@ echo ''
 # TODO: at this point there's this path:
 # /run/containerd/runc/default/
 # Which shouldn't be there as I try to keep everything under /run/ubernerd/containerd
+# TODO: maybe better to create a run dir in script_parent_dir and make a tempfs mount,
+# instead of using /run on the host
