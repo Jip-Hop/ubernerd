@@ -55,7 +55,7 @@ is_executable_available 'systemctl' || fail "systemctl is required but not avail
 # Check if ubernerd-containerd is already running, else don't continue and tell user to manually stop it first
 if systemctl is-active --quiet "ubernerd-containerd"; then
 	echo 'Abort: ubernerd-containerd is already running!'
-	echo 'You may stop it with: systemctl stop ubernerd-containerd.'
+	fail 'You may stop it with: systemctl stop ubernerd-containerd.'
 else
 	echo 'Welcome ubernerd!'
 fi
