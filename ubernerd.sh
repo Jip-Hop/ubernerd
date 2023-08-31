@@ -9,6 +9,7 @@ UBERNERD_UPGRADE="${UBERNERD_UPGRADE:-0}"
 # TODO: also check for newer version of ubernerd.sh script and upgrade when UBERNERD_UPGRADE is enabled
 # BEWARE that this would overwrite the current file, even in test scripts (where the local version is more-up-to-date)
 # So either disable UBERNERD_UPGRADE in test scripts or make an additional environment var to disable upgrading ubernerd.sh itself
+# Or maybe it's better to leave upgrading ubernerd.sh to the user and not do it automatically
 # TODO: allow a configurable namespace (default ubernerd) to prevent possible clashes on the filesystem
 # with regards to the service file and socket path etc.
 
