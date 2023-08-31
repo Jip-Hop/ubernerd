@@ -1,4 +1,6 @@
 # Test ubernerd inside Ubuntu
+# TODO: test each time a new nerdctl release becomes available
+# TODO: test develop branches as well
 
 name: test
 
