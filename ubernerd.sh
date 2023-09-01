@@ -241,6 +241,12 @@ run_nerdctl() {
 		--cni-path "${ubernerd_dir}/nerdctl_full/libexec/cni" \
 		--cni-netconfpath "${ubernerd_dir}/config/cni/net.d" \
 		"$@"
+	
+	# TODO: as a workaround for the current inability to configure /run/cni/dhcp.sock,
+	# see https://github.com/Jip-Hop/ubernerd/issues/2, it could be an option to find and replace
+	# all occurrences of /run/cni/dhcp.sock inside files in config/cni/net.d with a custom path.
+	# Perhaps this only needs to be done if the first argument to nerdctl is 'network'
+	# Are these changes taking effect immediately?
 }
 
 nerdctl_script_contents='#!/usr/bin/env bash'
