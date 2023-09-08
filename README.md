@@ -6,7 +6,7 @@ Run Docker and LXC-like containers with a portable install of [nerdctl](https://
 **USING THIS SCRIPT IS AT YOUR OWN RISK! IT COMES WITHOUT WARRANTY. THIS HAS NOT YET BEEN EXTENSIVELY TESTED!**
 
 ## Goal
-To extend (and not break) the capabilities of a systemd based Linux system, when modifying the rootfs is undesirable. For example a [TrueNAS SCALE](https://www.truenas.com/truenas-scale/) installation, which will lose all modifications to the rootfs, such as installing packages, after upgrading.
+To extend (not break) the capabilities of a systemd based Linux system, when modifying the rootfs is undesirable. For example a [TrueNAS SCALE](https://www.truenas.com/truenas-scale/) installation, which will lose all modifications to the rootfs, such as installing packages, after upgrading.
 
 ## Portable
 A portable installation of `ubernerd` is nothing more than the latest version of `nerdctl`, unpacked in a directory of your choice (e.g. on a ZFS dataset under `/mnt`) with config files to store everything (containers, images, volumes etc.) inside this directory.
