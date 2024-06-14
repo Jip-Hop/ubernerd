@@ -1,6 +1,10 @@
 # ubernerd
 Run Docker and LXC-like containers with a portable install of [nerdctl](https://github.com/containerd/nerdctl) on systemd based hosts.
 
+## Not Under Active Development
+
+I have ceased development on ubernerd in favor of [jailmaker](https://github.com/Jip-Hop/jailmaker).
+
 ## Disclaimer
 
 **USING THIS SCRIPT IS AT YOUR OWN RISK! IT COMES WITHOUT WARRANTY. THIS HAS NOT YET BEEN EXTENSIVELY TESTED!**
